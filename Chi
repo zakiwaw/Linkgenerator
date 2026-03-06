@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CHI Cargo Workflow (Gmail Edition)</title>
+    <style>
+        :root { 
+            --primary: #4dabff; --bg: #121212; --container-bg: #1e1e1e; 
+            --text-main: #e0e0e0; --text-dim: #b0b0b0; --border: #333;
+            --input-bg: #2a2a2a; --success: #28a745;
+        }
+
+        body { font-family: 'Segoe UI', sans-serif; margin: 20px; background-color: #2b2b2b; color: var(--text-main); }
+        .container { max-width: 900px; margin: auto; background: var(--container-bg); padding: 25px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid var(--border); }
+        
+        h2 { color: #fff; margin-top: 0; }
+        textarea { width: 100%; height: 80px; margin-bottom: 15px; padding: 12px; background-color: var(--input-bg); color: #fff; border: 1px solid var(--border); border-radius: 8px; resize: vertical; box-sizing: border-box; }
+        
+        .button-group { display: flex; gap: 10px; align-items: center; margin-bottom: 20px; }
+        .btn-main { flex: 2; padding: 12px; background-color: #0056b3; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; }
+        .btn-copy { flex: 1; padding: 12px; background-color: #218838; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; }
+        
+        .options-bar { display: flex; align-items: center; gap: 8px; background: #2a2a2a; padding: 8px 12px; border-radius: 6px; font-size: 0.85em; cursor: pointer; border: 1px solid var(--border); color: var(--text-dim); }
+
+        .row-item { display: flex; align-items: center; background: #252525; margin-bottom: 5px; padding: 8px 15px; border: 1px solid var(--border); border-radius: 6px; border-left: 6px solid #444; }
+        .id-link { text-decoration: none; color: #ffffff; font-weight: bold; min-width: 150px; }
+        .status-badge { padding: 2px 8px; border-radius: 4px; font-size: 0.9em; font-weight: bold; color: white; background: #444; cursor: pointer; }
+        .btn-delete { margin-left: auto; background: none; border: none; color: #555; font-size: 20px; cursor: pointer; }
+
+        /* Status Farben */
+        .sicher { background-color: #1e7e34; } 
+        .dunkel { background-color: #495057; } 
+        .rascargo { background-color: #0056b3; }
+        .gesucht { background-color: #d35400; } 
+        .abgelehnt { background-color: #c0392b; } 
+        .enthaftung { background-color: #6610f2; }
+
+        /* Modal */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-content { background: #2d2d2d; padding: 25px; border-radius: 12px; width: 90%; max-width: 400px; text-align: center; border: 1px solid #444; }
+        .status-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+        .status-btn { padding: 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; color: white; }
+        
+        /* Toast Notification */
+        .toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 12px 25px; border-radius: 8px; z-index: 2000; display: none; animation: fadeIn 0.3s; }
+        @keyframes fadeIn { from { opacity: 0; transform: translate(-50%, 20px); } to { opacity: 1; transform: translate(-50%, 0); } }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>CHI Cargo Workflow</h2>
+    <textarea id="inputList" placeholder="IDs hier einfügen..."></textarea>
+    
+    <div class="button-group">
+        <button class="btn-main" onclick="generateRows()">Liste generieren</button>
+        <button class="btn-copy" onclick="copyForGmail()">Für Gmail kopieren</button>
+        
+        <label class="options-bar">
+            <input type="checkbox" id="bulkDeleteToggle">
+            <span>Gruppe löschen</span>
+        </label>
+    </div>
+
+    <div id="results"></div>
+</div>
+
+<div id="statusModal" class="modal-overlay">
+    <div class="modal-content">
+        <h3 id="currentModalId">Status wählen</h3>
+        <div class="status-options">
+            <button class="status-btn sicher" onclick="setStatus('Sicher')">Sicher</button>
+            <button class="status-btn dunkel" onclick="setStatus('Dunkel')">Dunkel</button>
+            <button class="status-btn rascargo" onclick="setStatus('RasCargo')">RasCargo</button>
+            <button class="status-btn gesucht" onclick="setStatus('Wird gesucht')">Wird gesucht</button>
+            <button class="status-btn abgelehnt" onclick="setStatus('Abgelehnt')">Abgelehnt</button>
+            <button class="status-btn enthaftung" onclick="setStatus('Auf Enthaftung warten')">Enthaftung</button>
+        </div>
+        <br>
+        <input type="text" id="customInput" style="width:100%; padding:8px; margin-bottom:10px;" placeholder="Eigene Notiz...">
+        <button class="btn-main" style="width:100%;" onclick="saveCustomNote()">Notiz speichern</button>
+        <br><br>
+        <button onclick="closeModal()" style="color:#777; background:none; border:none; text-decoration:underline; cursor:pointer;">Abbrechen</button>
+    </div>
+</div>
+
+<div id="toast" class="toast">Kopiert!</div>
+
+<script>
+    let activeRowId = null;
+
+    // 1. AUTOMATISCHES LADEN VON GMAIL (GitHub URL Parameter)
+    window.onload = function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const sharedIds = urlParams.get('ids');
+        if (sharedIds) {
+            document.getElementById('inputList').value = decodeURIComponent(sharedIds).replace(/,/g, '\n');
+            generateRows();
+            showToast("IDs aus Gmail geladen!");
+        }
+    };
+
+    function generateRows() {
+        const textarea = document.getElementById('inputList');
+        const resultsDiv = document.getElementById('results');
+        const lines = textarea.value.split('\n');
+        resultsDiv.innerHTML = ''; 
+
+        lines.forEach((line, index) => {
+            if (line.trim().length === 0) return;
+            let parts = line.split(' - ');
+            let originalId = parts[0].trim();
+            let initialStatus = parts.length > 1 ? parts[1].trim() : "Kein Status";
+
+            const cleanId = originalId.replace(/\s+/g, '');
+            const url = `https://chicargo.chi-deutschland.com/outbound/shipments/search?q=${cleanId}`;
+            const rowId = 'row-' + Date.now() + '-' + index;
+
+            const div = document.createElement('div');
+            div.className = 'row-item';
+            div.id = rowId;
+            div.setAttribute('data-url', url);
+            div.innerHTML = `
+                <a href="${url}" target="_blank" class="id-link">${originalId}</a>
+                <span style="margin: 0 10px; color:#555;"> - </span>
+                <span class="status-badge" id="badge-${rowId}" onclick="openStatusModal('${rowId}', '${originalId}')">${initialStatus}</span>
+                <button class="btn-delete" onclick="deleteRow('${rowId}')">&times;</button>
+            `;
+            resultsDiv.appendChild(div);
+            if (initialStatus !== "Kein Status") applyColorToBadge(rowId, initialStatus);
+        });
+    }
+
+    function openStatusModal(rowId, id) {
+        activeRowId = rowId;
+        document.getElementById('currentModalId').innerText = id;
+        document.getElementById('statusModal').style.display = 'flex';
+    }
+
+    function setStatus(statusName) {
+        const badge = document.getElementById(`badge-${activeRowId}`);
+        if(badge) {
+            badge.innerText = statusName;
+            applyColorToBadge(activeRowId, statusName);
+        }
+        closeModal();
+    }
+
+    function saveCustomNote() {
+        const note = document.getElementById('customInput').value.trim();
+        if (note !== "") setStatus(note);
+    }
+
+    function applyColorToBadge(rowId, statusText) {
+        const badge = document.getElementById(`badge-${rowId}`);
+        const row = document.getElementById(rowId);
+        if (!badge || !row) return;
+        badge.className = 'status-badge'; 
+        const text = statusText.toLowerCase();
+        if (text.includes('sicher')) badge.classList.add('sicher');
+        else if (text.includes('dunkel')) badge.classList.add('dunkel');
+        else if (text.includes('rascargo')) badge.classList.add('rascargo');
+        else if (text.includes('gesucht')) badge.classList.add('gesucht');
+        else if (text.includes('abgelehnt')) badge.classList.add('abgelehnt');
+        else if (text.includes('enthaftung')) badge.classList.add('enthaftung');
+        row.style.borderLeftColor = window.getComputedStyle(badge).backgroundColor;
+    }
+
+    function deleteRow(rowId) {
+        const isBulk = document.getElementById('bulkDeleteToggle').checked;
+        if (isBulk) {
+            const status = document.getElementById(`badge-${rowId}`).innerText;
+            document.querySelectorAll('.row-item').forEach(r => {
+                if (r.querySelector('.status-badge').innerText === status) r.remove();
+            });
+        } else {
+            document.getElementById(rowId).remove();
+        }
+    }
+
+    function closeModal() {
+        document.getElementById('statusModal').style.display = 'none';
+        document.getElementById('customInput').value = '';
+    }
+
+    function showToast(msg) {
+        const t = document.getElementById('toast');
+        t.innerText = msg;
+        t.style.display = 'block';
+        setTimeout(() => t.style.display = 'none', 2000);
+    }
+
+    async function copyForGmail() {
+        const rows = document.querySelectorAll('.row-item');
+        if (rows.length === 0) return;
+        let html = `<div style="font-family: Arial, sans-serif; line-height: 1.2;">`;
+        rows.forEach(row => {
+            const id = row.querySelector('.id-link').innerText;
+            const url = row.getAttribute('data-url');
+            const status = row.querySelector('.status-badge').innerText;
+            html += `<p style="margin: 2px 0;"><a href="${url}" style="color: #0056b3; font-weight: bold; text-decoration: none;">${id}</a> - <span>${status}</span></p>`;
+        });
+        const blob = new Blob([html + `</div>`], { type: 'text/html' });
+        await navigator.clipboard.write([new ClipboardItem({ 'text/html': blob })]);
+        showToast("Kopiert für Gmail!");
+    }
+</script>
+</body>
+</html>
