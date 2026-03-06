@@ -3,30 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CHI Cargo Workflow (Gmail Edition)</title>
+    <title>CHI Cargo Workflow (Sheet Edition)</title>
     <style>
         :root { 
             --primary: #4dabff; --bg: #121212; --container-bg: #1e1e1e; 
             --text-main: #e0e0e0; --text-dim: #b0b0b0; --border: #333;
-            --input-bg: #2a2a2a; --success: #28a745;
+            --input-bg: #2a2a2a; --success: #28a745; --danger: #dc3545;
         }
 
-        body { font-family: 'Segoe UI', sans-serif; margin: 20px; background-color: #2b2b2b; color: var(--text-main); }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; background-color: #2b2b2b; color: var(--text-main); }
         .container { max-width: 900px; margin: auto; background: var(--container-bg); padding: 25px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid var(--border); }
         
         h2 { color: #fff; margin-top: 0; }
         textarea { width: 100%; height: 80px; margin-bottom: 15px; padding: 12px; background-color: var(--input-bg); color: #fff; border: 1px solid var(--border); border-radius: 8px; resize: vertical; box-sizing: border-box; }
         
-        .button-group { display: flex; gap: 10px; align-items: center; margin-bottom: 20px; }
-        .btn-main { flex: 2; padding: 12px; background-color: #0056b3; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; }
-        .btn-copy { flex: 1; padding: 12px; background-color: #218838; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; }
+        .button-group { display: flex; gap: 10px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
+        .btn { padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; transition: opacity 0.2s; color: white; }
+        .btn:hover { opacity: 0.9; }
+        
+        .btn-main { background-color: #0056b3; flex: 1.5; }
+        .btn-copy { background-color: var(--success); flex: 1; }
+        .btn-danger { background-color: var(--danger); flex: 0.8; }
         
         .options-bar { display: flex; align-items: center; gap: 8px; background: #2a2a2a; padding: 8px 12px; border-radius: 6px; font-size: 0.85em; cursor: pointer; border: 1px solid var(--border); color: var(--text-dim); }
 
+        #results { margin-top: 10px; }
         .row-item { display: flex; align-items: center; background: #252525; margin-bottom: 5px; padding: 8px 15px; border: 1px solid var(--border); border-radius: 6px; border-left: 6px solid #444; }
         .id-link { text-decoration: none; color: #ffffff; font-weight: bold; min-width: 150px; }
         .status-badge { padding: 2px 8px; border-radius: 4px; font-size: 0.9em; font-weight: bold; color: white; background: #444; cursor: pointer; }
-        .btn-delete { margin-left: auto; background: none; border: none; color: #555; font-size: 20px; cursor: pointer; }
+        .btn-delete-row { margin-left: auto; background: none; border: none; color: #555; font-size: 20px; cursor: pointer; line-height: 1; }
+        .btn-delete-row:hover { color: var(--danger); }
 
         /* Status Farben */
         .sicher { background-color: #1e7e34; } 
@@ -37,25 +43,25 @@
         .enthaftung { background-color: #6610f2; }
 
         /* Modal */
-        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; }
         .modal-content { background: #2d2d2d; padding: 25px; border-radius: 12px; width: 90%; max-width: 400px; text-align: center; border: 1px solid #444; }
-        .status-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+        .status-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 15px 0; }
         .status-btn { padding: 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; color: white; }
         
-        /* Toast Notification */
-        .toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 12px 25px; border-radius: 8px; z-index: 2000; display: none; animation: fadeIn 0.3s; }
-        @keyframes fadeIn { from { opacity: 0; transform: translate(-50%, 20px); } to { opacity: 1; transform: translate(-50%, 0); } }
+        /* Toast */
+        .toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 12px 25px; border-radius: 8px; z-index: 2000; display: none; border: 1px solid #444; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <h2>CHI Cargo Workflow</h2>
-    <textarea id="inputList" placeholder="IDs hier einfügen..."></textarea>
+    <textarea id="inputList" placeholder="Warte auf Daten aus Google Sheet..."></textarea>
     
     <div class="button-group">
-        <button class="btn-main" onclick="generateRows()">Liste generieren</button>
-        <button class="btn-copy" onclick="copyForGmail()">Für Gmail kopieren</button>
+        <button class="btn btn-main" onclick="generateRows()">Liste aktualisieren</button>
+        <button class="btn btn-copy" onclick="copyForGmail()">Für Gmail kopieren</button>
+        <button class="btn btn-danger" onclick="clearGoogleSheet()">Sheet leeren</button>
         
         <label class="options-bar">
             <input type="checkbox" id="bulkDeleteToggle">
@@ -77,27 +83,36 @@
             <button class="status-btn abgelehnt" onclick="setStatus('Abgelehnt')">Abgelehnt</button>
             <button class="status-btn enthaftung" onclick="setStatus('Auf Enthaftung warten')">Enthaftung</button>
         </div>
-        <br>
-        <input type="text" id="customInput" style="width:100%; padding:8px; margin-bottom:10px;" placeholder="Eigene Notiz...">
-        <button class="btn-main" style="width:100%;" onclick="saveCustomNote()">Notiz speichern</button>
+        <input type="text" id="customInput" style="width:100%; padding:10px; background:#1a1a1a; border:1px solid #444; color:white; border-radius:6px; box-sizing:border-box;" placeholder="Sonstige Notiz...">
+        <br><br>
+        <button class="btn btn-main" style="width:100%;" onclick="saveCustomNote()">Notiz speichern</button>
         <br><br>
         <button onclick="closeModal()" style="color:#777; background:none; border:none; text-decoration:underline; cursor:pointer;">Abbrechen</button>
     </div>
 </div>
 
-<div id="toast" class="toast">Kopiert!</div>
+<div id="toast" class="toast">Nachricht</div>
 
 <script>
+    const GOOGLE_APP_URL = "https://script.google.com/macros/s/AKfycbwCjy-FCBZLmz2KMtsVAPCTDglsMbghCR0dC7FvvFA2AJe-osVGgQGwJOZ6dlW-P1g/exec";
     let activeRowId = null;
 
-    // 1. AUTOMATISCHES LADEN VON GMAIL (GitHub URL Parameter)
-    window.onload = function() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const sharedIds = urlParams.get('ids');
-        if (sharedIds) {
-            document.getElementById('inputList').value = decodeURIComponent(sharedIds).replace(/,/g, '\n');
-            generateRows();
-            showToast("IDs aus Gmail geladen!");
+    // AUTOMATISCHES LADEN AUS GOOGLE SHEET
+    window.onload = async function() {
+        showToast("Verbinde mit Google Sheet...");
+        try {
+            const response = await fetch(GOOGLE_APP_URL);
+            const ids = await response.json();
+            if (ids && ids.length > 0) {
+                document.getElementById('inputList').value = ids.join('\n');
+                generateRows();
+                showToast(ids.length + " IDs geladen.");
+            } else {
+                showToast("Das Sheet ist aktuell leer.");
+            }
+        } catch (e) {
+            showToast("Fehler beim Laden der Daten.");
+            console.error(e);
         }
     };
 
@@ -109,10 +124,7 @@
 
         lines.forEach((line, index) => {
             if (line.trim().length === 0) return;
-            let parts = line.split(' - ');
-            let originalId = parts[0].trim();
-            let initialStatus = parts.length > 1 ? parts[1].trim() : "Kein Status";
-
+            const originalId = line.trim();
             const cleanId = originalId.replace(/\s+/g, '');
             const url = `https://chicargo.chi-deutschland.com/outbound/shipments/search?q=${cleanId}`;
             const rowId = 'row-' + Date.now() + '-' + index;
@@ -124,15 +136,14 @@
             div.innerHTML = `
                 <a href="${url}" target="_blank" class="id-link">${originalId}</a>
                 <span style="margin: 0 10px; color:#555;"> - </span>
-                <span class="status-badge" id="badge-${rowId}" onclick="openStatusModal('${rowId}', '${originalId}')">${initialStatus}</span>
-                <button class="btn-delete" onclick="deleteRow('${rowId}')">&times;</button>
+                <span class="status-badge" id="badge-${rowId}" onclick="openModal('${rowId}', '${originalId}')">Kein Status</span>
+                <button class="btn-delete-row" onclick="deleteRow('${rowId}')">&times;</button>
             `;
             resultsDiv.appendChild(div);
-            if (initialStatus !== "Kein Status") applyColorToBadge(rowId, initialStatus);
         });
     }
 
-    function openStatusModal(rowId, id) {
+    function openModal(rowId, id) {
         activeRowId = rowId;
         document.getElementById('currentModalId').innerText = id;
         document.getElementById('statusModal').style.display = 'flex';
@@ -149,7 +160,7 @@
 
     function saveCustomNote() {
         const note = document.getElementById('customInput').value.trim();
-        if (note !== "") setStatus(note);
+        if (note) setStatus(note);
     }
 
     function applyColorToBadge(rowId, statusText) {
@@ -168,14 +179,26 @@
     }
 
     function deleteRow(rowId) {
-        const isBulk = document.getElementById('bulkDeleteToggle').checked;
-        if (isBulk) {
+        if (document.getElementById('bulkDeleteToggle').checked) {
             const status = document.getElementById(`badge-${rowId}`).innerText;
             document.querySelectorAll('.row-item').forEach(r => {
                 if (r.querySelector('.status-badge').innerText === status) r.remove();
             });
         } else {
             document.getElementById(rowId).remove();
+        }
+    }
+
+    async function clearGoogleSheet() {
+        if (!confirm("Google Sheet wirklich leeren?")) return;
+        showToast("Lösche Sheet...");
+        try {
+            await fetch(GOOGLE_APP_URL + "?action=clear");
+            document.getElementById('inputList').value = '';
+            document.getElementById('results').innerHTML = '';
+            showToast("Sheet wurde geleert!");
+        } catch (e) {
+            showToast("Fehler beim Löschen.");
         }
     }
 
@@ -188,7 +211,7 @@
         const t = document.getElementById('toast');
         t.innerText = msg;
         t.style.display = 'block';
-        setTimeout(() => t.style.display = 'none', 2000);
+        setTimeout(() => t.style.display = 'none', 3000);
     }
 
     async function copyForGmail() {
